@@ -1,6 +1,20 @@
 -module(event).
--compile(export_all).
+-export([start/2, start_link/2, cancel/1, init/3]).
 -record(state, {server, name="", to_go=0}).
+
+%%% Spawn a new process calling init, passing in our Pid, with the Event Name and End Date/Time
+%%% This function returns the new process's Pid
+start(EventName, DateTime) ->
+	spawn(?MODULE, init, [self(), EventName, DateTime]).
+
+%%% Spawn a linked process calling init, passing in our Pid, with the Event Name and End Date/Time
+%%% This function returns the new process's Pid
+start_link(EventName, DateTime) ->
+	spawn_link(?MODULE, init, [self(), EventName, DateTime]).
+
+%%% Call loop passing in the record parameter
+init(Server, EventName, DateTime) ->
+	loop(#state{server=Server, name=EventName, to_go=time_to_go(DateTime)}).
 
 %%% Loop waiting for messages
 loop(S = #state{server=Server, to_go=[T|Next]}) ->
@@ -20,20 +34,6 @@ loop(S = #state{server=Server, to_go=[T|Next]}) ->
 				loop(S#state{to_go=Next})
 			end
 	end.
-
-%%% Spawn a new process calling init, passing in our Pid, with the Event Name and End Date/Time
-%%% This function returns the new process's Pid
-start(EventName, DateTime) ->
-	spawn(?MODULE, init, [self(), EventName, DateTime]).
-
-%%% Spawn a linked process calling init, passing in our Pid, with the Event Name and End Date/Time
-%%% This function returns the new process's Pid
-start_link(EventName, DateTime) ->
-	spawn_link(?MODULE, init, [self(), EventName, DateTime]).
-
-%%% Call loop passing in the record parameter
-init(Server, EventName, DateTime) ->
-	loop(#state{server=Server, name=EventName, to_go=time_to_go(DateTime)}).
 
 %%% Send message to the event process to cancel
 cancel(Pid) ->
