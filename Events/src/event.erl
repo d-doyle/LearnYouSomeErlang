@@ -2,6 +2,8 @@
 -export([start/2, start_link/2, cancel/1, init/3]).
 -record(state, {server, name="", to_go=0}).
 
+%%% User API
+
 %%% Spawn a new process calling init, passing in our Pid, with the Event Name and End Date/Time
 %%% This function returns the new process's Pid
 start(EventName, DateTime) ->
@@ -11,29 +13,6 @@ start(EventName, DateTime) ->
 %%% This function returns the new process's Pid
 start_link(EventName, DateTime) ->
 	spawn_link(?MODULE, init, [self(), EventName, DateTime]).
-
-%%% Call loop passing in the record parameter
-init(Server, EventName, DateTime) ->
-	loop(#state{server=Server, name=EventName, to_go=time_to_go(DateTime)}).
-
-%%% Loop waiting for messages
-loop(S = #state{server=Server, to_go=[T|Next]}) ->
-	%% The messages you receive are not related to the function parameters
-	receive
-		%% Receive a cancel message, respond with ok, and return (exit)
-		{Server, Ref, cancel} -> 
-			Server ! {Ref, ok}
-	after 
-		%% After timeout
-		T * 1000 ->
-			%% If there are no more timeouts then send done message and return
-			if Next =:= [] -> 
-				Server ! {done, S#state.name};
-			   %% else recursively call loop with remaining time
-			   Next =/= [] ->
-				loop(S#state{to_go=Next})
-			end
-	end.
 
 %%% Send message to the event process to cancel
 cancel(Pid) ->
@@ -51,9 +30,34 @@ cancel(Pid) ->
 			%% and flush any current messages
 			erlang:demonitor(Ref, [flush]),
 			{Ref, ok};
-		%% Monitor send back a down message
+		%% Monitor sent a down message
 		{'DOWN', Ref, process, Pid, Reason} ->
 			{Ref, Reason}
+	end.
+
+%%% Call loop passing in the state record parameter
+init(Server, EventName, DateTime) ->
+	loop(#state{server=Server, name=EventName, to_go=time_to_go(DateTime)}).
+
+%%% Helper functions
+
+%%% Loop waiting for messages
+loop(S = #state{server=Server, to_go=[T|Next]}) ->
+	%% The messages you receive are not related to the function parameters
+	receive
+		%% Receive a cancel message, respond with ok, and return (exit)
+		{Server, Ref, cancel} -> 
+			Server ! {Ref, ok}
+	after 
+		%% After timeout
+		T * 1000 ->
+			%% If there are no more timeouts then send done message and return
+			if Next =:= [] -> 
+				Server ! {done, S#state.name};
+			   %% else recursively call loop with remaining time list
+			   Next =/= [] ->
+				loop(S#state{to_go=Next})
+			end
 	end.
 
 %%% Calculate time to go from the date and time passed to this function
