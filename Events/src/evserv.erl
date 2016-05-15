@@ -1,16 +1,19 @@
 -module(evserv).
--compile(export_all).
+-export([start/0, start_link/0, terminate/0, subscribe/1, add_event/3, cancel/1, listen/1, init/0]).
 
 -record(state, {events, clients}).
 
 -record(event, {name="", description="", pid, timeout={{1970,1,1},{0,0,0}}}).
+
+%%% User API
 
 %%% Spawn a new event server process, register it with the module name, and return the process id
 start() ->
 	register(?MODULE, Pid=spawn(?MODULE, init, [])),
 	Pid.
 
-%%% Spawn and link a new event server process, register it with the module name, and return the process id
+%%% Spawn and link a new event server process, 
+%%% register it with the module name, and return the process id
 start_link() ->
 	register(?MODULE, Pid=spawn_link(?MODULE, init, [])),
 	Pid.
@@ -78,6 +81,8 @@ listen(Delay) ->
 	after Delay * 1000 ->
 		      []
 	end.
+
+%%% Helper functions
 
 init() -> 
 	%% Loading events from a static file could be done here
@@ -156,7 +161,7 @@ loop(S = #state{}) ->
 		%% Receive the done message from an Event
 		{done, Name} ->
 			%% Find the event in the events ordered dictionary
-			case ordict:find(Name, S#state.events) of
+			case orddict:find(Name, S#state.events) of
 				{ok, E} ->
 					%% Send a done message to each of the clients
 					send_to_clients(

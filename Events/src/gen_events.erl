@@ -41,14 +41,12 @@ cancel(Pid) ->
 
 %%% gen_server calls init and passes in the Args
 init([Server, EventName, DateTime]) ->
-	io:format("gen_server called init~n", []),
 	%% Return ok, State and Timeout to gen_server
 	{ok, #state{server=Server, name=EventName, to_go=time_to_go(DateTime)}, time_to_go(DateTime)}.
 
 %%% Replaces loop function, gen_server has the receive block
 %%% gen_server calls handle_cast with cancel message
 handle_cast({Server, Ref, cancel}, _State) ->
-	io:format("gen_server called handle_cast, cancel~n", []),
 	Server ! {Ref, ok},
 	{stop, normal, []};
 
@@ -64,7 +62,6 @@ handle_call(Message, _From, State) ->
 
 %%% gen_server calls handle info on timeout from value passed on init
 handle_info(timeout, S = #state{server=Server}) ->
-	io:format("Handle info timeout: ~p ~n", [Server]),
 	Server ! {done, S#state.name},
 	{stop, normal, []};
 

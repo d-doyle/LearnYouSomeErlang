@@ -1,0 +1,35 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%! -smp enable -sname gen_events_test -mnesia debug verbose
+main([]) ->
+	EventDate = calendar:gregorian_seconds_to_datetime(
+			       calendar:datetime_to_gregorian_seconds(
+			         calendar:now_to_local_time(
+				   now())) + 1),
+	io:format("First Event Date Time: ~w~n", [EventDate]),
+	gen_events:start("First Event", EventDate),
+
+	SecondEventDate = calendar:gregorian_seconds_to_datetime(
+			       calendar:datetime_to_gregorian_seconds(
+			         calendar:now_to_local_time(
+				   now())) + 500),
+	io:format("Second Event Date Time: ~w~n", [SecondEventDate]),
+	{ok, Pid} = gen_events:start_link("Second Event", SecondEventDate),
+
+	{Ref, Reason} = gen_events:cancel(Pid),
+	io:format("Second Event cancelled: {~w, ~w}~n", [Ref, Reason]),
+
+	receive_events().
+
+receive_events() ->
+	receive
+		{done, Event} ->
+			io:format("Event done: ~s~n", [Event]),
+			receive_events();
+		{_, Event} ->
+			io:format("Event: ~s~n", [Event]),
+			receive_events()
+		after 2000 ->
+			io:format("Quit~n")
+	end.
+
