@@ -1,6 +1,6 @@
 -module(gen_evserv).
 -behavior(gen_server).
--export([start/0, start_link/0, subscribe/1]).
+-export([start/0, start_link/0, terminate/0, subscribe/1, add_event/3, cancel/1, listen/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 -record(state, {events, clients}).
 -record(event, {name="", description="", pid, timeout={{1970,1,1},{0,0,0}}}).
@@ -31,18 +31,7 @@ subscribe(Pid) ->
 	Ref = erlang:monitor(process, whereis(?MODULE)),
 
 	%% Send the subscribe message
-	?MODULE ! {self(), Ref, {subscribe, Pid}},
-
-	%% Receive a response from the event server
-	receive
-		{Ref, ok} ->
-			{ok, Ref};
-		{'DOWN', Ref, process, _Pid, Reason} ->
-			{error, Reason}
-	%% Timeout
-	after 5000 ->
-		      {error, timeout}
-	end.
+	gen_server:call(?MODULE, {self(), Ref, {subscribe, Pid}}).
 
 %%% Add a new event to the event server
 add_event(Name, Description, TimeOut) ->
@@ -50,7 +39,7 @@ add_event(Name, Description, TimeOut) ->
 	Ref = make_ref(),
 
 	%% Send the add event message
-	?MODULE ! {self(), Ref, {add, Name, Description, TimeOut}},
+	gen_server:call(?MODULE, {self(), Ref, {add, Name, Description, TimeOut}}),
 	
 	%% Receive a response from the event server
 	receive
@@ -66,7 +55,7 @@ cancel(Name) ->
 	Ref = make_ref(),
 
 	%% Send the cancel event message
-	?MODULE ! {self(), Ref, {cancel, Name}},
+	gen_server:call(?MODULE, {self(), Ref, {cancel, Name}}),
 
 	%% Receive a response from the event server
 	receive
@@ -96,7 +85,7 @@ init([]) ->
 	%% Return ok and State to gen_server
 	{ok, #state{events=orddict:new(), clients=orddict:new()}}.
 
-handle_call({Pid, MsgRef, {subscribe, Client}}, _From, S = #state{}) ->
+handle_call({_Pid, MsgRef, {subscribe, Client}}, _From, S = #state{}) ->
 	%% Monitor the client process
 	Ref = erlang:monitor(process, Client),
 
@@ -110,7 +99,7 @@ handle_call({Pid, MsgRef, {subscribe, Client}}, _From, S = #state{}) ->
 	{reply, {MsgRef, ok}, S#state{clients=NewClients}};
 	
 %%% Add event message
-handle_call({Pid, MsgRef, {add, Name, Description, TimeOut}}, _From, S = #state{}) ->
+handle_call({_Pid, MsgRef, {add, Name, Description, TimeOut}}, _From, S = #state{}) ->
 	%% Check for valid date time
 	case valid_datetime(TimeOut) of
 		true ->
@@ -137,10 +126,10 @@ handle_call({Pid, MsgRef, {add, Name, Description, TimeOut}}, _From, S = #state{
 			%% Pid ! {MsgRef, {error, bad_timeout}},
 
 			{reply, {MsgRef, {error, bad_timeout}}, S}
-	end.
+	end;
 
 %% Cancel event message
-hendle_call({Pid, MsgRef, {cancel, Name}}, _From, S = #state{}) ->
+handle_call({_Pid, MsgRef, {cancel, Name}}, _From, S = #state{}) ->
 	%% Find the event in the ordered dictionary
 	Events = case orddict:find(Name, S#state.events) of
 		{ok, E} ->
@@ -160,8 +149,8 @@ hendle_call({Pid, MsgRef, {cancel, Name}}, _From, S = #state{}) ->
 	%% Loop passing in the new state
 	{reply, {MsgRef, ok}, S#state{events=Events}};
 
-%% Receive the done message from an Event
-handle_call({done, Name}) ->
+%%% Receive the done message from an Event
+handle_call({done, Name}, _From, S=#state{}) ->
 	%% Find the event in the events ordered dictionary
 	case ordict:find(Name, S#state.events) of
 		{ok, E} ->
@@ -174,36 +163,37 @@ handle_call({done, Name}) ->
 			NewEvents = orddict:erase(Name, S#state.events),
 
 			%% Loop passing in the new state
-			{noreply, S#state{events=NewEvents}}
+			{noreply, S#state{events=NewEvents}};
 		error ->
 			%% This may happen if we cancel an event and
 			%% it fires at the same time
 			{noreply, S}
 	end.
 
-%% Receive a shutdown message and exit
-handle_cast(shutdown) -> 
-	exit(shutdown);
+%%% Receive a shutdown message and exit
+handle_cast(shutdown, _State) -> 
+	%% exit(shutdown).
+	{stop, normal, []};
 
-%%% Loop (recursively, of course) listening for messages
-loop(S = #state{}) ->
-	receive
-		%% Reveive a down message from one of the clients
-		{'DOWN', Ref, process, _Pid, _Reason} ->
-			%% Loop and remove the client from the state
-			loop(S#state{clients=orddict:erase(Ref, S#state.clients)});
-		%% Receive a code change message
-		code_change ->
-			%% Do an external loop to force the loading of the new code module
-			?MODULE:loop(S);
-		%% Handle unknown messages by writing out to io
-		Unknown ->
-			io:format("Unknown message: ~p~n", [Unknown]),
-			%% Loop keeping previous state
-			loop(S)
-	end.
+%%% Reveive a down message from one of the clients
+handle_cast({'DOWN', Ref, process, _Pid, _Reason}, S=#state{}) ->
+	%% Loop and remove the client from the state
+	{noreply, S#state{clients=orddict:erase(Ref, S#state.clients)}}.
+
+%%% Receive a code change message
+code_change(_OldVsn, State, _Extra) ->
+	{ok, State}.
+
+%%% gen_server calls handle info with any message
+handle_info(Message, State) ->
+	io:format("Handle info unknown message ~p~n", [Message]),
+	{noreply, State}.
 
 %%% Validate the date and time
+%%% gen_server calls terminate when process is stopping
+terminate(normal, _State) ->
+	ok.
+
 valid_datetime({Date,Time}) ->
 	try
 		calendar:valid_date(Date) andalso valid_time(Time)

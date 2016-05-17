@@ -1,0 +1,47 @@
+#!/usr/bin/env escript
+%% -*- erlang -*-
+%%! -smp enable -sname gen_evserv_test -mnesia debug verbose
+main([]) ->
+	% Starting the event server
+	gen_evserv:start_link(),
+
+	% Subscribe to the event server as a client
+	Reply = gen_evserv:subscribe(self()),
+	io:format("Subscribed: ~w~n", [Reply]),
+
+	% Create a slightly future date time
+	FutureDateTime = calendar:gregorian_seconds_to_datetime(
+			       calendar:datetime_to_gregorian_seconds(
+			         calendar:now_to_local_time(
+				   now())) + 1),
+	io:format("Future Date Time: ~w~n", [FutureDateTime]),
+
+	% Add an event for the date time, using the event server
+	gen_evserv:add_event("Hey there", "test", FutureDateTime),
+
+	% Create a more future next date time
+	NextMinuteDateTime = calendar:gregorian_seconds_to_datetime(
+			       calendar:datetime_to_gregorian_seconds(
+			         calendar:now_to_local_time(
+				   now())) + 500),
+	io:format("Next Mintue Date Time: ~w~n", [NextMinuteDateTime]),
+
+	% Add an event for the next date time, using the event server
+	NextName = "Hey there2",
+	NextDescription = "test2",
+	gen_evserv:add_event(NextName, NextDescription,  NextMinuteDateTime),
+
+	% Cancel the next event, and check the return value to make sure it was cancelled
+	ok = gen_evserv:cancel(NextName),
+	io:format("~s cancelled.~n", [NextName]),
+
+	% Ask the event server to receive messages and return them to us
+	% What if return value is different?
+	[{done, Name, Description}] = gen_evserv:listen(2),
+	io:format("Event done(listen): ~s, ~s~n", [Name, Description]),
+
+	% Trap exits
+	process_flag(trap_exit, true),
+	% Ask the event server to terminate
+	ExitValue = gen_evserv:terminate(),
+	io:format("Exit value:~w.~n", [ExitValue]).

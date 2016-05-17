@@ -21,7 +21,7 @@ cancel(Pid) ->
 	%% Monitor in case the process is already dead
 	%% We will be notified of any state change
 	Ref = erlang:monitor(process, Pid),
-	%% Tell gen_server to call handle_call, passing in ServerRef and Request
+	%% Tell gen_server to call handle_cast, passing in ServerRef and Request
 	gen_server:cast(Pid, {self(), Ref, cancel}),
 
 	%% Receive messages
