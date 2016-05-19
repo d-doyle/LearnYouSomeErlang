@@ -18,6 +18,7 @@ main([]) ->
 
 	% Add an event for the date time, using the event server
 	gen_evserv:add_event("Hey there", "test", FutureDateTime),
+	io:format("Created event: Hey there~n"),
 
 	% Create a more future next date time
 	NextMinuteDateTime = calendar:gregorian_seconds_to_datetime(
@@ -30,15 +31,11 @@ main([]) ->
 	NextName = "Hey there2",
 	NextDescription = "test2",
 	gen_evserv:add_event(NextName, NextDescription,  NextMinuteDateTime),
+	io:format("Created event: ~s~n", [NextName]),
 
 	% Cancel the next event, and check the return value to make sure it was cancelled
 	ok = gen_evserv:cancel(NextName),
 	io:format("~s cancelled.~n", [NextName]),
-
-	% Ask the event server to receive messages and return them to us
-	% What if return value is different?
-	[{done, Name, Description}] = gen_evserv:listen(2),
-	io:format("Event done(listen): ~s, ~s~n", [Name, Description]),
 
 	% Trap exits
 	process_flag(trap_exit, true),

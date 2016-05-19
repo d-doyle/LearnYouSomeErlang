@@ -1,6 +1,6 @@
 -module(gen_evserv).
 -behavior(gen_server).
--export([start/0, start_link/0, terminate/0, subscribe/1, add_event/3, cancel/1, listen/1]).
+-export([start/0, start_link/0, terminate/0, subscribe/1, add_event/3, cancel/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 -record(state, {events, clients}).
 -record(event, {name="", description="", pid, timeout={{1970,1,1},{0,0,0}}}).
@@ -39,40 +39,16 @@ add_event(Name, Description, TimeOut) ->
 	Ref = make_ref(),
 
 	%% Send the add event message
-	gen_server:call(?MODULE, {self(), Ref, {add, Name, Description, TimeOut}}),
+	gen_server:call(?MODULE, {self(), Ref, {add, Name, Description, TimeOut}}).
 	
-	%% Receive a response from the event server
-	receive
-		{Ref, Msg} ->
-			Msg
-	after 5000 ->
-		      {error, timeout}
-	end.
-
 %%% Cancel an event on the event server
 cancel(Name) ->
 	%% Make a new ref
 	Ref = make_ref(),
 
 	%% Send the cancel event message
-	gen_server:call(?MODULE, {self(), Ref, {cancel, Name}}),
-
-	%% Receive a response from the event server
-	receive
-		{Ref, ok} ->
-			ok
-	after 5000 ->
-		      {error, timeout}
-	end.
-
-%%% Listen for event done messages from the event server
-listen(Delay) ->
-	receive
-		M = {done, _Name, _Description} ->
-			[M | listen(0)]
-	after Delay * 1000 ->
-		      []
-	end.
+	{Ref, ok} = gen_server:call(?MODULE, {self(), Ref, {cancel, Name}}),
+	ok.
 
 %%% gen_server calls init and passes in the Args
 init([]) -> 
@@ -81,7 +57,7 @@ init([]) ->
 	%% resource to find the events is. Then load it from here.
 	%% Another option is to just pass the events straight to the server
 	%% through this function.
-	io:format("gen_server called init~n", []),
+	
 	%% Return ok and State to gen_server
 	{ok, #state{events=orddict:new(), clients=orddict:new()}}.
 
@@ -146,7 +122,7 @@ handle_call({_Pid, MsgRef, {cancel, Name}}, _From, S = #state{}) ->
 	%% Send an ok response
 	%% Pid ! {MsgRef, ok},
 
-	%% Loop passing in the new state
+	%% Return a reply of ok with the new state
 	{reply, {MsgRef, ok}, S#state{events=Events}};
 
 %%% Receive the done message from an Event
@@ -183,6 +159,10 @@ handle_cast({'DOWN', Ref, process, _Pid, _Reason}, S=#state{}) ->
 %%% Receive a code change message
 code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
+
+handle_info({done, Name}, S=#state{}) ->
+	io:format("Event done: ~s~n", Name),
+	{noreply, orddict:erase(Name, S#state.events)};
 
 %%% gen_server calls handle info with any message
 handle_info(Message, State) ->
