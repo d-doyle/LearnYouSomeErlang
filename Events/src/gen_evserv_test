@@ -37,8 +37,17 @@ main([]) ->
 	ok = gen_evserv:cancel(NextName),
 	io:format("~s cancelled.~n", [NextName]),
 
+	receive_messages(),
+
 	% Trap exits
 	process_flag(trap_exit, true),
 	% Ask the event server to terminate
 	ExitValue = gen_evserv:terminate(),
-	io:format("Exit value:~w.~n", [ExitValue]).
+	io:format("Exit value: ~w.~n", [ExitValue]).
+
+receive_messages() ->
+	receive	
+
+	after 2000 ->
+		      ok
+	end.

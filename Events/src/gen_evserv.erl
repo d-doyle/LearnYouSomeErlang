@@ -80,7 +80,7 @@ handle_call({_Pid, MsgRef, {add, Name, Description, TimeOut}}, _From, S = #state
 	case valid_datetime(TimeOut) of
 		true ->
 			%% Start a new event process
-			EventPid = event:start_link(Name, TimeOut),
+			{ok, EventPid} = gen_events:start_link(Name, TimeOut),
 
 			%% Add the new event to the events ordered dictionary
 			NewEvents = orddict:store(
@@ -110,7 +110,7 @@ handle_call({_Pid, MsgRef, {cancel, Name}}, _From, S = #state{}) ->
 	Events = case orddict:find(Name, S#state.events) of
 		{ok, E} ->
 			%% Cancel the event
-			event:cancel(E#event.pid),
+			gen_events:cancel(E#event.pid),
 
 			%% Remove the event from the events ordered dictionary
 			orddict:erase(Name, S#state.events);
@@ -161,7 +161,7 @@ code_change(_OldVsn, State, _Extra) ->
 	{ok, State}.
 
 handle_info({done, Name}, S=#state{}) ->
-	io:format("Event done: ~s~n", Name),
+	io:format("Event done: ~s~n", [Name]),
 	{noreply, orddict:erase(Name, S#state.events)};
 
 %%% gen_server calls handle info with any message
